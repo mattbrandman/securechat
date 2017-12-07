@@ -73,7 +73,7 @@ def symetric_decrypt(key, associated_data, iv, ciphertext, tag):
 
 def hash_256(message):
     digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
-    digest.update(bytes(message, encoding="ascii"))
+    digest.update(bytes(message))
     return digest.finalize()
 
 def sign(private_key, message):
