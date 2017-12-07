@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import sys
+import os
 import argparse
 import socket
 import pickle
@@ -18,6 +19,9 @@ from cryptography.hazmat.primitives.serialization import ParameterFormat
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.primitives.serialization import PublicFormat
 
+NOT_LOGGED_IN = 0
+LOGGED_IN = 1
+status = 0
 
 
 class MainHandler:
@@ -123,13 +127,56 @@ class MainHandler:
         # TODO: Send user_public_key with the login message
         iv, encrypt, tag = crypto.symetric_encrypt(shared_key, json.dumps(credintials), b'only auth')
         self.sock.send_multipart(['LOGIN', encrypt, iv, tag])
+        
+        data = self.sock.recv_multipart()
+        encrypted = data[0]
+        iv = data[1]
+        tag = data[2]
+        decrypt = crypto.symetric_decrypt(shared_key, b'only auth', iv, encrypted, tag)
+        if decrypt == 'WRONG PASSWORD':
+            print 'WRONG PASSWORD'
+        elif decrypt == 'WRONG USER':
+            print 'WRONG USER'
+        else:
+            print 'LOGIN SUCCESS'
+            status = LOGGED_IN
+            after_login(self.sock, shared_key, self.username)
 
-    
 
 
+def after_login(sock, shared_key, username):
+    print '\n'
+    while True:
+        try:
+            user_request = raw_input('Enter your command: ')
+        except KeyboardInterrupt:
+            print 'ERROR'
+            # exit()
+        user_request = map(str, user_request.split(' '))
+        cmd = user_request[0]
 
+        if cmd == 'LIST' or cmd == 'list':
+            print 'LIST COMMAND'
+        
+        elif cmd == 'SEND' or cmd == 'send':
+            print 'SEND'
+
+        elif cmd == 'LOGOUT' or cmd == 'logout':
+            print 'LOGOUT'
+
+        
+
+
+        # TODO: Send user_public_key with the login message
+        iv, encrypt, tag = crypto.symetric_encrypt(shared_key, json.dumps(credintials), b'only auth')
+        sock.send_multipart(['LOGIN', encrypt, iv, tag])
    
-
+def error(err_msg, username, shared_key):
+    if status:
+        # should be encrypted
+        send_packet = ['SIGN-OUT', username]
+    print 'Error: ', err_msg
+    os._exit(0)
 
 def main():
     """Gets command line arguments and starts MainHandler

@@ -28,6 +28,8 @@ users = {
 
 # store registered users in a dictionary
 logged_ident_keys = dict()
+logged_ident_user = dict()
+
 
 def handler(sock, s_public_key, s_private_key):
     while True:
@@ -46,7 +48,6 @@ def handler(sock, s_public_key, s_private_key):
             # print logged_ident_keys
             if logged_ident_keys.has_key(ident):
                 login_user(sock, message)
-
             else:
                 print 'Connection Unknown!'
         else:
@@ -97,6 +98,7 @@ def connect_user(sock, s_public_key, s_private_key, message):
         
 def login_user(sock, message):
     ident = message[0]
+    shared_key = logged_ident_keys[ident]
     # perform login check
     print 'LOGIN CHECK'
     decrypt = crypto.symetric_decrypt(logged_ident_keys[ident], b'only auth', message[3], message[2], message[4])
@@ -109,10 +111,22 @@ def login_user(sock, message):
         if users[username] == passwd:
             # Login Succeeded 
             print username, ' Logged In'
+            logged_ident_user[ident] = username
+            # send login success
+            msg = 'LOGIN ACCEPTED'
+            iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
+            sock.send_multipart([ident, encrypt, iv, tag])
         else:
             print 'Wrong Passwd'
+            # send login error
+            msg = 'WRONG PASSWORD'
+            iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
+            sock.send_multipart([ident, encrypt, iv, tag])
     else:
         print 'No User By This Name'
+        msg = 'WRONG USER'
+        iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
+        sock.send_multipart([ident, encrypt, iv, tag])
 
 
 
