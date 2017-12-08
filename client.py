@@ -42,13 +42,15 @@ class MainHandler:
             call that must get user information before it gets called
     """
 
-    def __init__(self, server_ip, server_port, username, s_public_key):
+    def __init__(self, server_ip, server_port, username, s_public_key, u_public_key, u_private_key):
         """Initializes class MainHandler
         """
         self.server_ip = server_ip
         self.server_port = server_port
         self.username = username
         self.s_public_key = s_public_key
+        self.u_public_key = u_public_key
+        self.u_private_key = u_private_key
         #  Prepare our context and sockets
         context = zmq.Context()
 
@@ -120,11 +122,17 @@ class MainHandler:
             # exit()
         user_request = map(str, user_request.split(' '))
         passwd = user_request[0]
+
+        pem = self.u_public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+         )
         credintials = {
             'user' : self.username,
-            'passwd': passwd
+            'passwd': passwd,
+            'public_key': pem
         }
-        # TODO: Send user_public_key with the login message
+        # TODO: Send user_public_key with the login message، DONE
         iv, encrypt, tag = crypto.symetric_encrypt(shared_key, json.dumps(credintials), b'only auth')
         self.sock.send_multipart(['LOGIN', encrypt, iv, tag])
         
@@ -148,29 +156,54 @@ def after_login(sock, shared_key, username):
     print '\n'
     while True:
         try:
-            user_request = raw_input('Enter your command: ')
+            user_request = raw_input('=> Enter your command: ')
         except KeyboardInterrupt:
             print 'ERROR'
             # exit()
         user_request = map(str, user_request.split(' '))
         cmd = user_request[0]
-
+        
         if cmd == 'LIST' or cmd == 'list':
             print 'LIST COMMAND'
-        
+            list_users(sock, shared_key)
+
+
         elif cmd == 'SEND' or cmd == 'send':
             print 'SEND'
+            msg = 'SEND'
+            iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
+            sock.send_multipart(['CMD', encrypt, iv, tag])
+
 
         elif cmd == 'LOGOUT' or cmd == 'logout':
             print 'LOGOUT'
-
+            logout(sock, shared_key)
         
-
-
-        # TODO: Send user_public_key with the login message
-        iv, encrypt, tag = crypto.symetric_encrypt(shared_key, json.dumps(credintials), b'only auth')
-        sock.send_multipart(['LOGIN', encrypt, iv, tag])
    
+def list_users(sock, shared_key):
+    msg = 'LIST'
+    iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
+    sock.send_multipart(['CMD', encrypt, iv, tag])
+
+    data = sock.recv_multipart()
+    decrypt = crypto.symetric_decrypt(shared_key, b'only auth', data[1], data[0], data[2])
+
+    print '<= ', decrypt
+
+def logout(sock, shared_key):
+    msg = 'LOGOUT'
+    iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
+    sock.send_multipart(['CMD', encrypt, iv, tag])
+
+    data = sock.recv_multipart()
+    decrypt = crypto.symetric_decrypt(shared_key, b'only auth', data[1], data[0], data[2])
+    if decrypt == 'LOGOUT SUCCESS':
+        print decrypt
+        os._exit(0)
+    else:
+        print 'Error logging out'
+
+
 def error(err_msg, username, shared_key):
     if status:
         # should be encrypted
@@ -199,12 +232,29 @@ def main():
     #                     default="Alice",
     #                     help="name of user")
 
+    parser.add_argument("-pr", "--private-key",
+                        help="private key of the client")
+
+    parser.add_argument("-pu", "--public-key",
+                        help="public key of the client")
+
     parser.add_argument("-pus", "--public-key-server",
                         help="public key of the server")
 
     args = parser.parse_args()
-    PUBLIC_KEY = args.public_key_server
+    PUBLIC_KEY = args.public_key
+    PRIVATE_KEY = args.private_key
     with open(PUBLIC_KEY , "rb") as key_file:
+        u_public_key = serialization.load_der_public_key(
+                key_file.read(),
+                backend=default_backend())
+    with open(PRIVATE_KEY , "rb") as key_file:
+        u_private_key = serialization.load_der_private_key(
+                key_file.read(),
+                password=None,
+                backend=default_backend())
+    PUBLIC_KEY_SERVER = args.public_key_server
+    with open(PUBLIC_KEY_SERVER , "rb") as key_file:
         s_public_key = serialization.load_der_public_key(
                 key_file.read(),
                 backend=default_backend())
@@ -212,7 +262,7 @@ def main():
     # SERVER_IP = args.server
     # USERNAME = args.user
 
-    mh = MainHandler('localhost', 55005, 'bob', s_public_key)
+    mh = MainHandler('localhost', 55005, 'bob', s_public_key, u_public_key, u_private_key)
     mh.start()
 
 if __name__ == '__main__':

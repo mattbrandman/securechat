@@ -27,8 +27,9 @@ users = {
 }
 
 # store registered users in a dictionary
-logged_ident_keys = dict()
-logged_ident_user = dict()
+logged_ident_keys = dict()  # Saves shared key with each connection
+logged_ident_user = dict()  # Saves logged user with each connection
+logged_user_pukey = dict()  # Saves each user public key
 
 
 def handler(sock, s_public_key, s_private_key):
@@ -50,6 +51,22 @@ def handler(sock, s_public_key, s_private_key):
                 login_user(sock, message)
             else:
                 print 'Connection Unknown!'
+        elif cmd == 'CMD':
+            if logged_ident_keys.has_key(ident):
+                shared_key = logged_ident_keys[ident]
+                decrypt = crypto.symetric_decrypt(shared_key, b'only auth', message[3], message[2], message[4])
+
+                if decrypt == 'LIST':
+                    print 'user want list'
+                    list_command(sock, ident)
+                elif decrypt == 'SEND':
+                    print 'user want send'
+                elif decrypt == 'LOGOUT':
+                    print 'user want logout'
+                    lougout_command(sock, ident)
+            else:
+                print 'Connection Unknown!'
+
         else:
             print 'ERR'
 
@@ -57,6 +74,32 @@ def handler(sock, s_public_key, s_private_key):
         # print 'dslgnljsdnljsfn'
         # print_lock.release()
         # return
+
+
+def list_command(sock, ident):
+    print 'Sending list ...'
+    list_users = ""
+    for i in logged_ident_user:
+        list_users = list_users + logged_ident_user[i] + ", "
+
+    shared_key = logged_ident_keys[ident]
+    # msg = ', '.join(list_users)
+    print list_users
+    iv, encrypt, tag = crypto.symetric_encrypt(shared_key, list_users.encode('ascii'), b'only auth')
+    sock.send_multipart([ident, encrypt, iv, tag])
+
+def lougout_command(sock, ident):
+    shared_key = logged_ident_keys[ident]
+    user = logged_ident_user[ident]
+
+    del logged_ident_keys[ident]
+    del logged_ident_user[ident]
+    del logged_user_pukey[user] 
+    iv, encrypt, tag = crypto.symetric_encrypt(shared_key, 'LOGOUT SUCCESS', b'only auth')
+    sock.send_multipart([ident, encrypt, iv, tag])
+    print user, 'Logged out'
+
+
 
 
 def connect_user(sock, s_public_key, s_private_key, message):
@@ -107,11 +150,14 @@ def login_user(sock, message):
 
     username = credintials['user']
     passwd = credintials['passwd']
+    u_public_key = credintials['public_key']
     if username in users:
         if users[username] == passwd:
             # Login Succeeded 
             print username, ' Logged In'
             logged_ident_user[ident] = username
+            logged_user_pukey[username] = u_public_key
+            # later when using public_key, use: key = load_pem_public_key(public_pem_data, backend=default_backend())
             # send login success
             msg = 'LOGIN ACCEPTED'
             iv, encrypt, tag = crypto.symetric_encrypt(shared_key, msg, b'only auth')
