@@ -1,0 +1,29 @@
+README
+
+
+⁃	Program Requirements:
+	⁃	Python 2.7.x 
+	⁃	cryptography library, to install: ‘pip install cryptography’
+	-	zeromq library, to install: ‘pip install pyzmq’
+
+
+-	User Credentials
+	-	'bob': '123456',
+        -	'alice': 'alice123',
+        -	'carole': 'ca123',
+        -	'ibrahim': '123123',
+        -	'matt': '321321' 
+
+
+-	How to Run:
+	-	First; run the server using :
+			$ python server.py -pr private_key.der -pu public_key.der
+	-	you can specify port number for server using ‘-sp’ option.
+	
+	- 	Then, for each user, run using:
+			$  python client.py -pus public_key.der -pr u1private_key.der -pu u1public_key.der -u bob
+		username must be specified with ‘-u’ option.
+		default server ip is ‘localhost’, you can specify server port using ‘-sp’ option and ‘-sip’ for server ip.
+
+
+
